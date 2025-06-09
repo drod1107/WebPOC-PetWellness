@@ -8,12 +8,17 @@ const app = {
     // Check authentication
     const isAuthenticated = await auth.checkAuth();
 
-    // Hide splash screen
+    // Hide splash screen with safe checks
     setTimeout(() => {
-      document.querySelector(".splash-screen").style.opacity = "0";
-      setTimeout(() => {
-        document.querySelector(".splash-screen").style.display = "none";
-      }, 300);
+      const splash = document.querySelector(".splash-screen");
+      if (splash) { 
+        splash.style.opacity = "0";
+        setTimeout(() => {
+          // Only hide if still present
+          const splashElement = document.querySelector(".splash-screen");
+          if (splashElement) splashElement.style.display = "none";
+        }, 300);
+      }
     }, 1500);
 
     if (!isAuthenticated) {
@@ -36,10 +41,7 @@ const app = {
         const lang = e.target.getAttribute("data-lang");
         setLanguage(lang);
         document.querySelectorAll(".lang-btn").forEach((btn) => {
-          btn.classList.toggle(
-            "active",
-            btn.getAttribute("data-lang") === lang
-          );
+          btn.classList.toggle("active", btn.getAttribute("data-lang") === lang);
         });
         this.refreshCurrentPage();
       }
@@ -299,13 +301,11 @@ const app = {
 
   // Load dashboard
   async loadDashboard() {
-    const app = document.getElementById("app");
-    app.innerHTML = `
+    const appContainer = document.getElementById("app");
+    appContainer.innerHTML = `
             <div class="container">
                 <div class="app-bar">
-                    <h1 class="app-bar-title" data-translate="appTitle">${t(
-                      "appTitle"
-                    )}</h1>
+                    <h1 class="app-bar-title" data-translate="appTitle">${t("appTitle")}</h1>
                     <div class="app-bar-actions">
                         <button class="btn btn-icon" onclick="app.handleSignOut()">
                             <span>🚪</span>
@@ -320,7 +320,7 @@ const app = {
             ${components.createBottomNav("home")}
         `;
 
-    // Load pets
+    // Load pets from database
     const { data: pets, error } = await db.getPets();
 
     if (error) {
@@ -329,41 +329,38 @@ const app = {
     }
 
     const dashboardContent = document.getElementById("dashboard-content");
+    if (!dashboardContent) {
+      // Safety check: if the container is missing, stop here to avoid errors
+      console.error("Dashboard content container not found.");
+      return;
+    }
 
     if (pets.length === 0) {
-      // Show empty state
+      // Show empty state (no pets)
       dashboardContent.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">🐾</div>
-                    <h2 class="empty-title" data-translate="noPetsYet">${t(
-                      "noPetsYet"
-                    )}</h2>
-                    <p class="empty-message" data-translate="addFirstPet">${t(
-                      "addFirstPet"
-                    )}</p>
+                    <h2 class="empty-title" data-translate="noPetsYet">${t("noPetsYet")}</h2>
+                    <p class="empty-message" data-translate="addFirstPet">${t("addFirstPet")}</p>
                     <button class="btn btn-primary" onclick="app.showAddPetModal()">
                         <span data-translate="addPet">${t("addPet")}</span>
                     </button>
                 </div>
             `;
     } else {
-      // Show pet and quick actions
+      // Show all pets and quick actions
       this.currentPet = pets[0];
+      // Create pet cards for each pet
+      const petCardsHTML = pets.map((pet) => components.createPetCard(pet)).join("");
       dashboardContent.innerHTML = `
-                ${components.createPetCard(this.currentPet)}
-                
-                <h2 class="mt-3" data-translate="quickActions">${t(
-                  "quickActions"
-                )}</h2>
+                ${petCardsHTML}
+                <h2 class="mt-3" data-translate="quickActions">${t("quickActions")}</h2>
                 <div class="quick-actions">
                     <div class="action-card action-card-primary" onclick="app.showMoodModal()">
                         <span class="action-icon">😊</span>
-                        <span class="action-label" data-translate="logMood">${t(
-                          "logMood"
-                        )}</span>
+                        <span class="action-label" data-translate="logMood">${t("logMood")}</span>
                     </div>
                 </div>
-                
                 <div class="card mt-3">
                     <h3 data-translate="todaysMood">${t("todaysMood")}</h3>
                     <div id="todays-mood-content">
@@ -372,42 +369,45 @@ const app = {
                 </div>
             `;
 
-      // Add pet card click handler
-      document.querySelector(".pet-card").addEventListener("click", () => {
-        this.showPetProfile(this.currentPet);
+      // Attach click handler to each pet card to open that pet's profile
+      document.querySelectorAll(".pet-card").forEach((card) => {
+        card.addEventListener("click", () => {
+          const petId = card.getAttribute("data-pet-id");
+          const pet = pets.find((p) => p.id === petId);
+          if (pet) {
+            this.currentPet = pet;
+            this.showPetProfile(pet);
+          }
+        });
       });
 
-      // Load today's mood
+      // Load today's mood for the current pet (defaulting to the first pet)
       this.loadTodaysMood();
     }
 
-    // Add FAB for adding pets
+    // Add FAB (floating action button) for adding pets if at least one pet exists
     if (pets.length > 0) {
       const fab = document.createElement("button");
       fab.className = "fab";
       fab.innerHTML = "+";
       fab.onclick = () => this.showAddPetModal();
-      app.appendChild(fab);
+      appContainer.appendChild(fab);
     }
   },
 
-  // Load today's mood
+  // Load today's mood for the current pet
   async loadTodaysMood() {
     const { data: mood, error } = await db.getTodaysMood(this.currentPet.id);
     const container = document.getElementById("todays-mood-content");
 
     if (error) {
-      container.innerHTML = `<p class="text-center text-secondary">${t(
-        "somethingWentWrong"
-      )}</p>`;
+      container.innerHTML = `<p class="text-center text-secondary">${t("somethingWentWrong")}</p>`;
       return;
     }
 
     if (!mood) {
       container.innerHTML = `
-                <p class="text-center text-secondary" data-translate="noMoodLogged">${t(
-                  "noMoodLogged"
-                )}</p>
+                <p class="text-center text-secondary" data-translate="noMoodLogged">${t("noMoodLogged")}</p>
                 <div class="text-center mt-2">
                     <button class="btn btn-primary" onclick="app.showMoodModal()">
                         <span data-translate="logMood">${t("logMood")}</span>
@@ -441,9 +441,9 @@ const app = {
                         ${moodEmojis[mood.mood]}
                     </div>
                     <div class="mood-status-info">
-                        <div class="mood-status-label" data-translate="${
-                          mood.mood
-                        }">${t(mood.mood)}</div>
+                        <div class="mood-status-label" data-translate="${mood.mood}">${t(
+        mood.mood
+      )}</div>
                         <div class="mood-status-time">${components.formatDate(
                           mood.logged_at
                         )}</div>
@@ -458,12 +458,12 @@ const app = {
     }
   },
 
-  // Show pet profile
+  // Show pet profile page
   async showPetProfile(pet) {
     this.currentPage = "profile";
-    const app = document.getElementById("app");
+    const appContainer = document.getElementById("app");
 
-    app.innerHTML = `
+    appContainer.innerHTML = `
             <div class="container">
                 <div class="app-bar">
                     <button class="btn btn-icon" onclick="app.loadDashboard()">
@@ -488,9 +488,9 @@ const app = {
                         }
                     </div>
                     <h1 class="profile-name">${pet.name}</h1>
-                    <p class="profile-details">${t(
-                      pet.species
-                    )} • ${components.calculateAge(pet.birth_date)}</p>
+                    <p class="profile-details">${t(pet.species)} • ${components.calculateAge(
+      pet.birth_date
+    )}</p>
                 </div>
                 
                 <div class="card">
@@ -556,10 +556,10 @@ const app = {
         `;
   },
 
-  // Show settings
+  // Show settings page
   showSettings() {
-    const app = document.getElementById("app");
-    app.innerHTML = `
+    const appContainer = document.getElementById("app");
+    appContainer.innerHTML = `
             <div class="container">
                 <div class="app-bar">
                     <h1 class="app-bar-title" data-translate="settings">${t(
@@ -572,14 +572,12 @@ const app = {
                     <div class="mt-2">
                         <button class="btn ${
                           currentLang === "en" ? "btn-primary" : "btn-secondary"
-                        } mb-2" 
-                                onclick="setLanguage('en'); app.showSettings();">
+                        } mb-2" onclick="setLanguage('en'); app.showSettings();">
                             English
                         </button>
                         <button class="btn ${
                           currentLang === "it" ? "btn-primary" : "btn-secondary"
-                        }" 
-                                onclick="setLanguage('it'); app.showSettings();">
+                        }" onclick="setLanguage('it'); app.showSettings();">
                             Italiano
                         </button>
                     </div>
@@ -602,52 +600,36 @@ const app = {
     modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 class="modal-title" data-translate="addPet">${t(
-                      "addPet"
-                    )}</h2>
+                    <h2 class="modal-title" data-translate="addPet">${t("addPet")}</h2>
                     <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
                 </div>
                 
                 <form id="add-pet-form">
                     <div class="form-group">
-                        <label class="form-label" data-translate="petName">${t(
-                          "petName"
-                        )} *</label>
-<input type="text" class="form-input" id="pet-name" required>
+                        <label class="form-label" data-translate="petName">${t("petName")} *</label>
+                        <input type="text" class="form-input" id="pet-name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label" data-translate="species">${t(
-                          "species"
-                        )} *</label>
+                        <label class="form-label" data-translate="species">${t("species")} *</label>
                         <select class="form-select" id="pet-species" required>
-                            <option value="dog" data-translate="dog">${t(
-                              "dog"
-                            )}</option>
-                            <option value="cat" data-translate="cat">${t(
-                              "cat"
-                            )}</option>
+                            <option value="dog" data-translate="dog">${t("dog")}</option>
+                            <option value="cat" data-translate="cat">${t("cat")}</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label">
                             <span data-translate="breed">${t("breed")}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
                         <input type="text" class="form-input" id="pet-breed">
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label">
-                            <span data-translate="birthDate">${t(
-                              "birthDate"
-                            )}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span data-translate="birthDate">${t("birthDate")}</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
                         <input type="date" class="form-input" id="pet-birth-date">
                     </div>
@@ -655,9 +637,7 @@ const app = {
                     <div class="form-group">
                         <label class="form-label">
                             <span data-translate="weight">${t("weight")}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
                         <input type="number" class="form-input" id="pet-weight" step="0.1" min="0">
                     </div>
@@ -665,9 +645,7 @@ const app = {
                     <div class="form-group">
                         <label class="form-label">
                             <span data-translate="notes">${t("notes")}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
                         <textarea class="form-textarea" id="pet-notes"></textarea>
                     </div>
@@ -676,8 +654,7 @@ const app = {
                         <button type="submit" class="btn btn-primary btn-block" data-translate="save">
                             ${t("save")}
                         </button>
-                        <button type="button" class="btn btn-secondary btn-block mt-2" 
-                                onclick="this.closest('.modal').remove()">
+                        <button type="button" class="btn btn-secondary btn-block mt-2" onclick="this.closest('.modal').remove()">
                             <span data-translate="cancel">${t("cancel")}</span>
                         </button>
                     </div>
@@ -688,52 +665,45 @@ const app = {
     document.body.appendChild(modal);
 
     // Add form submit handler
-    document
-      .getElementById("add-pet-form")
-      .addEventListener("submit", async (e) => {
-        e.preventDefault();
+    document.getElementById("add-pet-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
 
-        const petData = {
-          name: document.getElementById("pet-name").value,
-          species: document.getElementById("pet-species").value,
-          breed: document.getElementById("pet-breed").value || null,
-          birth_date: document.getElementById("pet-birth-date").value || null,
-          weight:
-            parseFloat(document.getElementById("pet-weight").value) || null,
-          notes: document.getElementById("pet-notes").value || null,
-        };
+      const petData = {
+        name: document.getElementById("pet-name").value,
+        species: document.getElementById("pet-species").value,
+        breed: document.getElementById("pet-breed").value || null,
+        birth_date: document.getElementById("pet-birth-date").value || null,
+        weight: parseFloat(document.getElementById("pet-weight").value) || null,
+        notes: document.getElementById("pet-notes").value || null,
+      };
 
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        const originalHTML = submitButton.innerHTML;
-        submitButton.innerHTML = components.createLoadingButton(t("loading"));
-        submitButton.disabled = true;
+      const submitButton = e.target.querySelector('button[type="submit"]');
+      const originalHTML = submitButton.innerHTML;
+      submitButton.innerHTML = components.createLoadingButton(t("loading"));
+      submitButton.disabled = true;
 
-        try {
-          const { data, error } = await db.createPet(petData);
-
-          if (error) throw new Error(error);
-
-          components.showToast(t("petAdded"), "success");
-          modal.remove();
-          this.loadDashboard();
-        } catch (error) {
-          components.showToast(error.message, "error");
-          submitButton.innerHTML = originalHTML;
-          submitButton.disabled = false;
-        }
-      });
+      try {
+        const { data, error } = await db.createPet(petData);
+        if (error) throw new Error(error);
+        components.showToast(t("petAdded"), "success");
+        modal.remove();
+        this.loadDashboard();
+      } catch (error) {
+        components.showToast(error.message, "error");
+        submitButton.innerHTML = originalHTML;
+        submitButton.disabled = false;
+      }
+    });
   },
 
-  // Show mood modal
+  // Show mood logging modal
   showMoodModal() {
     const modal = document.createElement("div");
     modal.className = "modal active";
     modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 class="modal-title">${t("howIsFeeling", {
-                      name: this.currentPet.name,
-                    })}</h2>
+                    <h2 class="modal-title">${t("howIsFeeling", { name: this.currentPet.name })}</h2>
                     <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
                 </div>
                 
@@ -743,9 +713,7 @@ const app = {
                 
                 <form id="mood-form">
                     <div class="form-group">
-                        <label class="form-label" data-translate="addNote">${t(
-                          "addNote"
-                        )}</label>
+                        <label class="form-label" data-translate="addNote">${t("addNote")}</label>
                         <textarea class="form-textarea" id="mood-note" rows="3"></textarea>
                     </div>
                     
@@ -758,53 +726,43 @@ const app = {
 
     document.body.appendChild(modal);
 
-    // Add mood selection handler
+    // Mood selection handler
     let selectedMood = null;
     modal.querySelectorAll(".mood-item").forEach((item) => {
       item.addEventListener("click", () => {
-        modal
-          .querySelectorAll(".mood-item")
-          .forEach((m) => m.classList.remove("selected"));
+        modal.querySelectorAll(".mood-item").forEach((m) => m.classList.remove("selected"));
         item.classList.add("selected");
         selectedMood = item.getAttribute("data-mood");
       });
     });
 
     // Add form submit handler
-    document
-      .getElementById("mood-form")
-      .addEventListener("submit", async (e) => {
-        e.preventDefault();
+    document.getElementById("mood-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
 
-        if (!selectedMood) {
-          components.showToast(t("selectMood"), "error");
-          return;
-        }
+      if (!selectedMood) {
+        components.showToast(t("selectMood"), "error");
+        return;
+      }
 
-        const note = document.getElementById("mood-note").value;
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        const originalHTML = submitButton.innerHTML;
-        submitButton.innerHTML = components.createLoadingButton(t("loading"));
-        submitButton.disabled = true;
+      const note = document.getElementById("mood-note").value;
+      const submitButton = e.target.querySelector('button[type="submit"]');
+      const originalHTML = submitButton.innerHTML;
+      submitButton.innerHTML = components.createLoadingButton(t("loading"));
+      submitButton.disabled = true;
 
-        try {
-          const { data, error } = await db.logMood(
-            this.currentPet.id,
-            selectedMood,
-            note || null
-          );
-
-          if (error) throw new Error(error);
-
-          components.showToast(t("moodLoggedSuccess"), "success");
-          modal.remove();
-          this.loadTodaysMood();
-        } catch (error) {
-          components.showToast(error.message, "error");
-          submitButton.innerHTML = originalHTML;
-          submitButton.disabled = false;
-        }
-      });
+      try {
+        const { data, error } = await db.logMood(this.currentPet.id, selectedMood, note || null);
+        if (error) throw new Error(error);
+        components.showToast(t("moodLoggedSuccess"), "success");
+        modal.remove();
+        this.loadTodaysMood();  // Refresh today's mood display
+      } catch (error) {
+        components.showToast(error.message, "error");
+        submitButton.innerHTML = originalHTML;
+        submitButton.disabled = false;
+      }
+    });
   },
 
   // Show edit pet modal
@@ -815,26 +773,18 @@ const app = {
     modal.innerHTML = `
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 class="modal-title" data-translate="editPet">${t(
-                      "editPet"
-                    )}</h2>
+                    <h2 class="modal-title" data-translate="editPet">${t("editPet")}</h2>
                     <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
                 </div>
                 
                 <form id="edit-pet-form">
                     <div class="form-group">
-                        <label class="form-label" data-translate="petName">${t(
-                          "petName"
-                        )} *</label>
-                        <input type="text" class="form-input" id="pet-name" value="${
-                          pet.name
-                        }" required>
+                        <label class="form-label" data-translate="petName">${t("petName")} *</label>
+                        <input type="text" class="form-input" id="pet-name" value="${pet.name}" required>
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label" data-translate="species">${t(
-                          "species"
-                        )} *</label>
+                        <label class="form-label" data-translate="species">${t("species")} *</label>
                         <select class="form-select" id="pet-species" required>
                             <option value="dog" ${
                               pet.species === "dog" ? "selected" : ""
@@ -848,61 +798,42 @@ const app = {
                     <div class="form-group">
                         <label class="form-label">
                             <span data-translate="breed">${t("breed")}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
-                        <input type="text" class="form-input" id="pet-breed" value="${
-                          pet.breed || ""
+                        <input type="text" class="form-input" id="pet-breed" value="${pet.breed || ""}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            <span data-translate="birthDate">${t("birthDate")}</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
+                        </label>
+                        <input type="date" class="form-input" id="pet-birth-date" value="${
+                          pet.birth_date ? pet.birth_date.split("T")[0] : ""
                         }">
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label">
-                            <span data-translate="birthDate">${t(
-                              "birthDate"
-                            )}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
-                        </label>
-                        <input type="date" class="form-input" id="pet-birth-date" 
-                               value="${
-                                 pet.birth_date
-                                   ? pet.birth_date.split("T")[0]
-                                   : ""
-                               }">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">
                             <span data-translate="weight">${t("weight")}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
-                        <input type="number" class="form-input" id="pet-weight" 
-                               value="${pet.weight || ""}" step="0.1" min="0">
+                        <input type="number" class="form-input" id="pet-weight" value="${pet.weight || ""}" step="0.1" min="0">
                     </div>
                     
                     <div class="form-group">
                         <label class="form-label">
                             <span data-translate="notes">${t("notes")}</span>
-                            <span class="text-secondary">(<span data-translate="optional">${t(
-                              "optional"
-                            )}</span>)</span>
+                            <span class="text-secondary">(<span data-translate="optional">${t("optional")}</span>)</span>
                         </label>
-                        <textarea class="form-textarea" id="pet-notes">${
-                          pet.notes || ""
-                        }</textarea>
+                        <textarea class="form-textarea" id="pet-notes">${pet.notes || ""}</textarea>
                     </div>
                     
                     <div class="mt-3">
                         <button type="submit" class="btn btn-primary btn-block" data-translate="save">
                             ${t("save")}
                         </button>
-                        <button type="button" class="btn btn-secondary btn-block mt-2" 
-                                onclick="this.closest('.modal').remove()">
+                        <button type="button" class="btn btn-secondary btn-block mt-2" onclick="this.closest('.modal').remove()">
                             <span data-translate="cancel">${t("cancel")}</span>
                         </button>
                     </div>
@@ -913,41 +844,36 @@ const app = {
     document.body.appendChild(modal);
 
     // Add form submit handler
-    document
-      .getElementById("edit-pet-form")
-      .addEventListener("submit", async (e) => {
-        e.preventDefault();
+    document.getElementById("edit-pet-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
 
-        const updates = {
-          name: document.getElementById("pet-name").value,
-          species: document.getElementById("pet-species").value,
-          breed: document.getElementById("pet-breed").value || null,
-          birth_date: document.getElementById("pet-birth-date").value || null,
-          weight:
-            parseFloat(document.getElementById("pet-weight").value) || null,
-          notes: document.getElementById("pet-notes").value || null,
-        };
+      const updates = {
+        name: document.getElementById("pet-name").value,
+        species: document.getElementById("pet-species").value,
+        breed: document.getElementById("pet-breed").value || null,
+        birth_date: document.getElementById("pet-birth-date").value || null,
+        weight: parseFloat(document.getElementById("pet-weight").value) || null,
+        notes: document.getElementById("pet-notes").value || null,
+      };
 
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        const originalHTML = submitButton.innerHTML;
-        submitButton.innerHTML = components.createLoadingButton(t("loading"));
-        submitButton.disabled = true;
+      const submitButton = e.target.querySelector('button[type="submit"]');
+      const originalHTML = submitButton.innerHTML;
+      submitButton.innerHTML = components.createLoadingButton(t("loading"));
+      submitButton.disabled = true;
 
-        try {
-          const { data, error } = await db.updatePet(pet.id, updates);
-
-          if (error) throw new Error(error);
-
-          this.currentPet = data;
-          components.showToast(t("petUpdated"), "success");
-          modal.remove();
-          this.showPetProfile(data);
-        } catch (error) {
-          components.showToast(error.message, "error");
-          submitButton.innerHTML = originalHTML;
-          submitButton.disabled = false;
-        }
-      });
+      try {
+        const { data, error } = await db.updatePet(pet.id, updates);
+        if (error) throw new Error(error);
+        this.currentPet = data;
+        components.showToast(t("petUpdated"), "success");
+        modal.remove();
+        this.showPetProfile(data);
+      } catch (error) {
+        components.showToast(error.message, "error");
+        submitButton.innerHTML = originalHTML;
+        submitButton.disabled = false;
+      }
+    });
   },
 
   // Handle sign out
@@ -955,6 +881,9 @@ const app = {
     if (confirm(t("confirmSignOut"))) {
       try {
         await auth.handleSignOut();
+        // After signing out, return to login page
+        this.currentPet = null;
+        this.showLoginPage();
       } catch (error) {
         components.showToast(error.message, "error");
       }

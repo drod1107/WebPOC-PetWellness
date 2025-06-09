@@ -22,22 +22,21 @@ const components = {
     
     // Create pet card
     createPetCard(pet) {
-        const speciesIcon = pet.species === 'dog' ? '🐕' : '🐈';
-        const age = this.calculateAge(pet.birth_date);
-        
-        return `
-            <div class="card pet-card" data-pet-id="${pet.id}">
-                <div class="pet-avatar">
-                    ${pet.avatar_url ? `<img src="${pet.avatar_url}" alt="${pet.name}">` : speciesIcon}
-                </div>
-                <div class="pet-info">
-                    <div class="pet-name">${pet.name}</div>
-                    <div class="pet-details">${t(pet.species)} • ${age}</div>
-                </div>
-                <span class="arrow">→</span>
-            </div>
-        `;
-    },
+  const speciesIcon = pet.species === 'dog' ? '🐕' : '🐈';
+  const age = this.calculateAge(pet.birth_date);
+  return `
+    <div class="card pet-card" data-pet-id="${pet.id}">
+      <div class="pet-avatar">
+        ${pet.avatar_url ? `<img src="${pet.avatar_url}" alt="${pet.name}">` : speciesIcon}
+      </div>
+      <div class="pet-info">
+        <div class="pet-name">${pet.name}</div>
+        <div class="pet-details">${t(pet.species)} • ${age}</div>
+      </div>
+      <span class="arrow">→</span>
+    </div>
+  `;
+},
     
     // Create mood selector
     createMoodSelector() {
