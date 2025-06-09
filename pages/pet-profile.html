@@ -43,23 +43,30 @@
                 <span class="nav-label">Settings</span>
             </a>
         </div>
+        
+        <!-- FAB for mood logging -->
+        <button class="fab" id="mood-fab" style="display: none;">😊</button>
     </div>
     
     <!-- Load scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="../js/config.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
     <script src="../js/translations.js"></script>
-    <script src="../js/supabase-client.js"></script>
     <script src="../js/components.js"></script>
     <script src="../js/auth.js"></script>
+    <script src="../js/modals.js"></script>
     
     <script>
         let currentPet = null;
         
         document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🔄 Pet profile loading...');
+            
             // Check authentication
             const user = await db.getCurrentUser();
             if (!user) {
+                console.log('❌ Not authenticated, redirecting to login');
                 window.location.href = 'login.html';
                 return;
             }
@@ -69,12 +76,19 @@
             const petId = urlParams.get('id');
             
             if (!petId) {
-                // No pet ID, redirect to dashboard
+                console.log('❌ No pet ID provided, redirecting to dashboard');
                 window.location.href = 'dashboard.html';
                 return;
             }
             
             await loadPetProfile(petId);
+            
+            // Set up FAB click handler
+            document.getElementById('mood-fab').addEventListener('click', () => {
+                if (currentPet) {
+                    ModalSystem.showMoodModal(currentPet);
+                }
+            });
         });
         
         async function loadPetProfile(petId) {
@@ -91,6 +105,9 @@
                     profileContent.innerHTML = `
                         <div class="card">
                             <p class="text-center">Error loading pet profile: ${error.message}</p>
+                            <div class="text-center mt-2">
+                                <a href="dashboard.html" class="btn btn-primary">Go to Dashboard</a>
+                            </div>
                         </div>
                     `;
                     return;
@@ -158,12 +175,20 @@
                     </div>
                     
                     <div class="card">
-                        <h2 class="info-title">Recent Mood History</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 class="info-title" style="margin: 0;">Recent Mood History</h2>
+                            <button class="btn btn-primary" onclick="ModalSystem.showMoodModal(currentPet)">
+                                Log Mood
+                            </button>
+                        </div>
                         <div id="mood-history">
                             <div class="loading-spinner" style="margin: 20px auto;"></div>
                         </div>
                     </div>
                 `;
+                
+                // Show mood FAB
+                document.getElementById('mood-fab').style.display = 'flex';
                 
                 // Load mood history
                 await loadMoodHistory(pet.id);
@@ -174,6 +199,9 @@
                     <div class="card">
                         <p class="text-center">Unexpected error occurred</p>
                         <p class="text-center text-small">Check console for details</p>
+                        <div class="text-center mt-2">
+                            <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+                        </div>
                     </div>
                 `;
             }
@@ -183,9 +211,11 @@
             const moodHistoryContainer = document.getElementById('mood-history');
             
             try {
+                console.log('🔄 Loading mood history for pet:', petId);
                 const { data: moods, error } = await db.getMoodLogs(petId, 5); // Get last 5 moods
                 
                 if (error) {
+                    console.error('❌ Error loading mood history:', error);
                     moodHistoryContainer.innerHTML = `<p class="text-center text-secondary">Error loading mood history</p>`;
                     return;
                 }
@@ -194,7 +224,7 @@
                     moodHistoryContainer.innerHTML = `
                         <p class="text-center text-secondary">No mood entries yet</p>
                         <div class="text-center mt-2">
-                            <button class="btn btn-primary" onclick="logMood()">
+                            <button class="btn btn-primary" onclick="ModalSystem.showMoodModal(currentPet)">
                                 Log First Mood
                             </button>
                         </div>
@@ -213,7 +243,7 @@
                 };
                 
                 const moodList = moods.map(mood => `
-                    <div class="mood-status mb-2">
+                    <div class="mood-status mb-2" style="cursor: pointer;" onclick="showMoodDetails('${mood.id}', '${mood.mood}', '${mood.note || ''}', '${mood.logged_at}')">
                         <div class="mood-status-icon" style="background-color: ${moodColors[mood.mood]}20;">
                             ${moodEmojis[mood.mood]}
                         </div>
@@ -225,18 +255,33 @@
                     </div>
                 `).join('');
                 
-                moodHistoryContainer.innerHTML = moodList + `
-                    <div class="text-center mt-3">
-                        <button class="btn btn-primary" onclick="logMood()">
-                            Log New Mood
-                        </button>
-                    </div>
-                `;
+                moodHistoryContainer.innerHTML = moodList;
+                
+                console.log('✅ Mood history loaded:', moods.length, 'entries');
                 
             } catch (error) {
-                console.error('Error loading mood history:', error);
+                console.error('❌ Error loading mood history:', error);
                 moodHistoryContainer.innerHTML = `<p class="text-center text-secondary">Error loading mood history</p>`;
             }
+        }
+        
+        function showMoodDetails(moodId, mood, note, timestamp) {
+            const modal = ModalSystem.createModal('mood-details-modal', 'Mood Details', `
+                <div style="text-align: center; margin: 20px 0;">
+                    <div style="font-size: 60px; margin-bottom: 16px;">
+                        ${mood === 'happy' ? '😊' : mood === 'content' ? '😌' : mood === 'neutral' ? '😐' : mood === 'anxious' ? '😰' : mood === 'sad' ? '😢' : '😠'}
+                    </div>
+                    <h3>${mood.charAt(0).toUpperCase() + mood.slice(1)}</h3>
+                    <p class="text-secondary">${formatDateTime(timestamp)}</p>
+                    ${note ? `<div class="mt-3"><strong>Note:</strong><br><p>${note}</p></div>` : ''}
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary btn-block" onclick="ModalSystem.closeModal('mood-details-modal')">
+                        Close
+                    </button>
+                </div>
+            `);
         }
         
         function calculateAge(birthDate) {
@@ -269,11 +314,11 @@
         }
         
         function editPet() {
-            alert('Edit pet modal would open here');
-        }
-        
-        function logMood() {
-            alert('Mood logging modal would open here');
+            if (currentPet) {
+                ModalSystem.showEditPetModal(currentPet);
+            } else {
+                ModalSystem.showToast('No pet data available', 'error');
+            }
         }
     </script>
 </body>

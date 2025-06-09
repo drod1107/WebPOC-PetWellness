@@ -47,20 +47,24 @@
     
     <!-- Load scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="../js/config.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
     <script src="../js/translations.js"></script>
-    <script src="../js/supabase-client.js"></script>
     <script src="../js/components.js"></script>
     <script src="../js/auth.js"></script>
+    <script src="../js/modals.js"></script>
     
     <script>
         let currentPet = null;
         
         // Dashboard functionality
         document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🔄 Dashboard loading...');
+            
             // Check authentication
             const user = await db.getCurrentUser();
             if (!user) {
+                console.log('❌ Not authenticated, redirecting to login');
                 window.location.href = 'login.html';
                 return;
             }
@@ -71,7 +75,7 @@
             // Event listeners
             document.getElementById('logout-btn').addEventListener('click', handleSignOut);
             document.getElementById('add-pet-fab').addEventListener('click', () => {
-                alert('Add pet modal would open here');
+                ModalSystem.showAddPetModal();
             });
             
             document.getElementById('profile-nav').addEventListener('click', (e) => {
@@ -79,7 +83,7 @@
                 if (currentPet) {
                     window.location.href = `pet-profile.html?id=${currentPet.id}`;
                 } else {
-                    alert('Please add a pet first');
+                    ModalSystem.showToast('Please add a pet first', 'error');
                 }
             });
         });
@@ -97,6 +101,11 @@
                         <div class="card">
                             <p class="text-center">Error loading pets: ${error.message}</p>
                             <p class="text-center text-small">Check console for details.</p>
+                            <div class="text-center mt-2">
+                                <button class="btn btn-primary" onclick="ModalSystem.showAddPetModal()">
+                                    Try Adding a Pet
+                                </button>
+                            </div>
                         </div>
                     `;
                     return;
@@ -111,7 +120,7 @@
                             <div class="empty-icon">🐾</div>
                             <h2 class="empty-title">No Pets Yet</h2>
                             <p class="empty-message">Add your first pet to start tracking their wellness</p>
-                            <button class="btn btn-primary" onclick="alert('Add pet modal would open here')">
+                            <button class="btn btn-primary" onclick="ModalSystem.showAddPetModal()">
                                 Add Pet
                             </button>
                         </div>
@@ -129,7 +138,7 @@
                                 <span class="action-icon">😊</span>
                                 <span class="action-label">Log Mood</span>
                             </div>
-                            <div class="action-card action-card-secondary" onclick="alert('Activity log coming soon')">
+                            <div class="action-card action-card-secondary" onclick="ModalSystem.showToast('Activity logging coming soon!', 'info')">
                                 <span class="action-icon">🏃</span>
                                 <span class="action-label">Log Activity</span>
                             </div>
@@ -155,6 +164,11 @@
                     <div class="card">
                         <p class="text-center">Unexpected error occurred</p>
                         <p class="text-center text-small">Check console for details</p>
+                        <div class="text-center mt-2">
+                            <button class="btn btn-primary" onclick="location.reload()">
+                                Retry
+                            </button>
+                        </div>
                     </div>
                 `;
             }
@@ -252,7 +266,11 @@
         }
         
         function showMoodModal() {
-            alert('Mood logging modal would open here');
+            if (currentPet) {
+                ModalSystem.showMoodModal(currentPet);
+            } else {
+                ModalSystem.showToast('No pet selected', 'error');
+            }
         }
         
         async function handleSignOut() {
@@ -261,7 +279,7 @@
                     await db.signOut();
                     window.location.href = 'login.html';
                 } catch (error) {
-                    alert('Error signing out: ' + error.message);
+                    ModalSystem.showToast('Error signing out: ' + error.message, 'error');
                 }
             }
         }
