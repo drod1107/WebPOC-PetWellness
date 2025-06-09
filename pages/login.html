@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Pet Wellness Tracker</title>
+    <link rel="stylesheet" href="../styles.css">
+    <meta name="description" content="Sign in to your Pet Wellness Tracker account">
+    <meta name="theme-color" content="#6B4EE6">
+</head>
+<body>
+    <div id="app">
+        <!-- Content will be populated by app.js when it detects this is a login page -->
+        <div class="auth-container">
+            <div class="language-switcher">
+                <button class="lang-btn active" data-lang="en">EN</button>
+                <button class="lang-btn" data-lang="it">IT</button>
+            </div>
+            <div class="auth-card">
+                <div class="auth-logo">🐾</div>
+                <h1 class="auth-title">Welcome Back!</h1>
+                <p class="auth-subtitle">Sign in to continue tracking your pet's wellness</p>
+                
+                <form id="login-form">
+                    <div class="form-group">
+                        <input type="email" class="form-input" id="email" required placeholder="Email">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" class="form-input" id="password" required placeholder="Password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        Sign In
+                    </button>
+                </form>
+                
+                <div class="text-center mt-3">
+                    <span>Don't have an account?</span>
+                    <a href="register.html" class="btn-text">Sign Up</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/translations.js"></script>
+    <script src="../js/supabase-client.js"></script>
+    <script src="../js/components.js"></script>
+    <script src="../js/auth.js"></script>
+    
+    <script>
+        // Simple login page handler
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check if already logged in
+            const user = await db.getCurrentUser();
+            if (user) {
+                window.location.href = 'dashboard.html';
+                return;
+            }
+            
+            // Handle form submission
+            document.getElementById('login-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const submitButton = e.target.querySelector('button[type="submit"]');
+                
+                const originalHTML = submitButton.innerHTML;
+                submitButton.innerHTML = 'Signing in...';
+                submitButton.disabled = true;
+                
+                try {
+                    const { data, error } = await db.signIn(email, password);
+                    
+                    if (error) {
+                        throw new Error(error.message);
+                    }
+                    
+                    // Redirect to dashboard
+                    window.location.href = 'dashboard.html';
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                    submitButton.innerHTML = originalHTML;
+                    submitButton.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

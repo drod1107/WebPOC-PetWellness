@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Pet Wellness Tracker</title>
+    <link rel="stylesheet" href="../styles.css">
+    <meta name="description" content="Your pet wellness dashboard">
+    <meta name="theme-color" content="#6B4EE6">
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="app-bar">
+                <h1 class="app-bar-title">Pet Wellness Tracker</h1>
+                <div class="app-bar-actions">
+                    <button class="btn btn-icon" id="logout-btn" title="Sign Out">
+                        <span>🚪</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="dashboard-content">
+                <div class="loading-spinner" style="margin: 50px auto;"></div>
+            </div>
+        </div>
+        
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <a href="dashboard.html" class="nav-item active">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Home</span>
+            </a>
+            <a href="pet-profile.html" class="nav-item" id="profile-nav">
+                <span class="nav-icon">🐾</span>
+                <span class="nav-label">Profile</span>
+            </a>
+            <a href="#" class="nav-item" id="settings-nav">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">Settings</span>
+            </a>
+        </div>
+        
+        <!-- FAB for adding pets -->
+        <button class="fab" id="add-pet-fab" style="display: none;">+</button>
+    </div>
+    
+    <!-- Load scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/translations.js"></script>
+    <script src="../js/supabase-client.js"></script>
+    <script src="../js/components.js"></script>
+    <script src="../js/auth.js"></script>
+    
+    <script>
+        let currentPet = null;
+        
+        // Dashboard functionality
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check authentication
+            const user = await db.getCurrentUser();
+            if (!user) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            console.log('✅ User authenticated:', user.email);
+            await loadDashboard();
+            
+            // Event listeners
+            document.getElementById('logout-btn').addEventListener('click', handleSignOut);
+            document.getElementById('add-pet-fab').addEventListener('click', () => {
+                alert('Add pet modal would open here');
+            });
+            
+            document.getElementById('profile-nav').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (currentPet) {
+                    window.location.href = `pet-profile.html?id=${currentPet.id}`;
+                } else {
+                    alert('Please add a pet first');
+                }
+            });
+        });
+        
+        async function loadDashboard() {
+            const dashboardContent = document.getElementById('dashboard-content');
+            
+            try {
+                console.log('🔄 Loading pets...');
+                const { data: pets, error } = await db.getPets();
+                
+                if (error) {
+                    console.error('❌ Error loading pets:', error);
+                    dashboardContent.innerHTML = `
+                        <div class="card">
+                            <p class="text-center">Error loading pets: ${error.message}</p>
+                            <p class="text-center text-small">Check console for details.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                console.log('✅ Pets loaded:', pets);
+                
+                if (!pets || pets.length === 0) {
+                    // Show empty state
+                    dashboardContent.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">🐾</div>
+                            <h2 class="empty-title">No Pets Yet</h2>
+                            <p class="empty-message">Add your first pet to start tracking their wellness</p>
+                            <button class="btn btn-primary" onclick="alert('Add pet modal would open here')">
+                                Add Pet
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    // Show pets and dashboard
+                    currentPet = pets[0];
+                    
+                    dashboardContent.innerHTML = `
+                        ${createPetCard(currentPet)}
+                        
+                        <h2 class="mt-3">Quick Actions</h2>
+                        <div class="quick-actions">
+                            <div class="action-card action-card-primary" onclick="showMoodModal()">
+                                <span class="action-icon">😊</span>
+                                <span class="action-label">Log Mood</span>
+                            </div>
+                            <div class="action-card action-card-secondary" onclick="alert('Activity log coming soon')">
+                                <span class="action-icon">🏃</span>
+                                <span class="action-label">Log Activity</span>
+                            </div>
+                        </div>
+                        
+                        <div class="card mt-3">
+                            <h3>Today's Mood</h3>
+                            <div id="todays-mood-content">
+                                <div class="loading-spinner" style="margin: 20px auto;"></div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Show FAB
+                    document.getElementById('add-pet-fab').style.display = 'flex';
+                    
+                    // Load today's mood
+                    await loadTodaysMood();
+                }
+            } catch (error) {
+                console.error('❌ Unexpected error:', error);
+                dashboardContent.innerHTML = `
+                    <div class="card">
+                        <p class="text-center">Unexpected error occurred</p>
+                        <p class="text-center text-small">Check console for details</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function createPetCard(pet) {
+            const speciesIcon = pet.species === 'dog' ? '🐕' : '🐈';
+            const age = calculateAge(pet.birth_date);
+            
+            return `
+                <div class="card pet-card" onclick="goToPetProfile()">
+                    <div class="pet-avatar">
+                        ${pet.avatar_url ? `<img src="${pet.avatar_url}" alt="${pet.name}">` : speciesIcon}
+                    </div>
+                    <div class="pet-info">
+                        <div class="pet-name">${pet.name}</div>
+                        <div class="pet-details">${pet.species} • ${age}</div>
+                    </div>
+                    <span style="margin-left: auto;">→</span>
+                </div>
+            `;
+        }
+        
+        function calculateAge(birthDate) {
+            if (!birthDate) return 'Unknown age';
+            
+            const birth = new Date(birthDate);
+            const now = new Date();
+            const years = now.getFullYear() - birth.getFullYear();
+            const months = now.getMonth() - birth.getMonth() + (years * 12);
+            
+            if (months < 12) {
+                return `${months} months old`;
+            } else {
+                return `${Math.floor(months / 12)} years old`;
+            }
+        }
+        
+        async function loadTodaysMood() {
+            if (!currentPet) return;
+            
+            const container = document.getElementById('todays-mood-content');
+            
+            try {
+                const { data: mood, error } = await db.getTodaysMood(currentPet.id);
+                
+                if (error) {
+                    container.innerHTML = `<p class="text-center text-secondary">Error loading mood</p>`;
+                    return;
+                }
+                
+                if (!mood) {
+                    container.innerHTML = `
+                        <p class="text-center text-secondary">No mood logged today</p>
+                        <div class="text-center mt-2">
+                            <button class="btn btn-primary" onclick="showMoodModal()">
+                                Log Mood
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    const moodEmojis = {
+                        happy: '😊', content: '😌', neutral: '😐',
+                        anxious: '😰', sad: '😢', angry: '😠'
+                    };
+                    
+                    const moodColors = {
+                        happy: '#4CAF50', content: '#2196F3', neutral: '#9E9E9E',
+                        anxious: '#FFB300', sad: '#FF9800', angry: '#F44336'
+                    };
+                    
+                    container.innerHTML = `
+                        <div class="mood-status">
+                            <div class="mood-status-icon" style="background-color: ${moodColors[mood.mood]}20;">
+                                ${moodEmojis[mood.mood]}
+                            </div>
+                            <div class="mood-status-info">
+                                <div class="mood-status-label">${mood.mood}</div>
+                                <div class="mood-status-time">${new Date(mood.logged_at).toLocaleTimeString()}</div>
+                                ${mood.note ? `<div class="text-small text-secondary mt-1">${mood.note}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading today\'s mood:', error);
+                container.innerHTML = `<p class="text-center text-secondary">Error loading mood</p>`;
+            }
+        }
+        
+        function goToPetProfile() {
+            if (currentPet) {
+                window.location.href = `pet-profile.html?id=${currentPet.id}`;
+            }
+        }
+        
+        function showMoodModal() {
+            alert('Mood logging modal would open here');
+        }
+        
+        async function handleSignOut() {
+            if (confirm('Are you sure you want to sign out?')) {
+                try {
+                    await db.signOut();
+                    window.location.href = 'login.html';
+                } catch (error) {
+                    alert('Error signing out: ' + error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
